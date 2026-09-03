@@ -1,6 +1,6 @@
-# PDF/圖片 OCR 處理器 (Gemini & OpenAI 相容版)
+# eBook Converter (PDF/圖片 OCR 轉換器)
 
-本專案提供一個強大的工具，使用 Google Gemini API 或 OpenAI 相容 API 將 PDF 檔案和圖片轉換為 Markdown 文字。它被設計用來無縫處理大型檔案、中斷續傳，並支援多種 AI 模型調用。
+本專案提供一個強大的工具，使用 Google Gemini API 或 OpenAI 相容 API 將 PDF 檔案、圖片與電子書內容轉換為 Markdown 文字。它被設計用來無縫處理大型檔案、中斷續傳，並支援多種 AI 模型調用。
 
 ## 功能
 
@@ -14,7 +14,7 @@
 ## 專案結構
 
 ```
-PDFOCR/
+eBook-Converter/
 │
 ├───input/                  # 用於輸入 PDF 和圖片檔案的資料夾
 ├───output/                 # 用於輸出 Markdown 檔案的資料夾
@@ -34,8 +34,8 @@ PDFOCR/
 2.  **安裝**:
     *   複製儲存庫：
         ```bash
-        git clone https://github.com/your-username/PDFOCR.git
-        cd PDFOCR
+        git clone https://github.com/hongdartw/ebook-converter.git
+        cd ebook-converter
         ```
     *   安裝所需的 Python 套件：
         ```bash

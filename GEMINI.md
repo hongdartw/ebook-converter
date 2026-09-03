@@ -1,7 +1,7 @@
-# PDF/圖片 OCR 處理器 (Gemini & OpenAI 相容版)
+# eBook Converter (PDF/圖片 OCR 轉換器)
 
 ## 專案概述
-本專案是一個基於 Python 的工具，用於將 PDF 檔案和圖片轉換為高品質的 Markdown 格式。它結合了 Google Gemini 的多模態能力與 OpenAI 相容介面的靈活性，支援大規模文件處理、中斷續傳，並能自動將結果轉換為繁體中文。
+本專案是一個基於 Python 的工具，用於將 PDF 檔案、圖片與電子書內容轉換為高品質的 Markdown 格式。它結合了 Google Gemini 的多模態能力與 OpenAI 相容介面的靈活性，支援大規模文件處理、中斷續傳，並能自動將結果轉換為繁體中文。
 
 ### 核心技術
 - **Python 3.x**

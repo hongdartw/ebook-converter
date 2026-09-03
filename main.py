@@ -18,16 +18,35 @@ cc = OpenCC('s2twp')
 
 def get_config():
     """從環境變數中讀取 AI 設定。"""
+    openai_providers = []
+
+    if os.getenv("OPENAI_API_KEY"):
+        openai_providers.append({
+            "name": "OpenAI",
+            "api_key": os.getenv("OPENAI_API_KEY"),
+            "base_url": os.getenv("OPENAI_API_URL"),
+            "model": os.getenv("OPENAI_MODEL", "gpt-4o"),
+        })
+
+    i = 1
+    while True:
+        key = os.getenv(f"PROXY_{i}_API_KEY")
+        if not key:
+            break
+        openai_providers.append({
+            "name": f"Proxy {i} ({os.getenv(f'PROXY_{i}_MODEL', 'unknown')})",
+            "api_key": key,
+            "base_url": os.getenv(f"PROXY_{i}_API_URL"),
+            "model": os.getenv(f"PROXY_{i}_MODEL", "gpt-4o"),
+        })
+        i += 1
+
     config = {
         "gemini": {
             "api_key": os.getenv("GEMINI_API_KEY"),
-            "model": os.getenv("GEMINI_MODEL", "gemini-1.5-flash-latest")
+            "model": os.getenv("GEMINI_MODEL", "gemini-1.5-flash-latest"),
         },
-        "openai": {
-            "api_key": os.getenv("OPENAI_API_KEY"),
-            "base_url": os.getenv("OPENAI_API_URL"),
-            "model": os.getenv("OPENAI_MODEL", "gpt-4o")
-        }
+        "openai_providers": openai_providers,
     }
     return config
 
@@ -108,7 +127,7 @@ def process_file(filename, config):
                 if config["gemini"]["api_key"]:
                     print(f"  嘗試使用 Gemini: {config['gemini']['model']}")
                     markdown_part = process_image_with_gemini(
-                        image_path, 
+                        image_path,
                         config["gemini"]["api_key"],
                         config["gemini"]["model"]
                     )
@@ -117,20 +136,20 @@ def process_file(filename, config):
                         page_processed = True
                         break
 
-                # 如果 Gemini 失敗或未設定，嘗試 OpenAI 相容 API
-                if config["openai"]["api_key"]:
-                    print(f"  嘗試使用 OpenAI 相容 API: {config['openai']['model']}")
+                # 依序嘗試所有 OpenAI 相容 API (含 Proxy)
+                for provider in config["openai_providers"]:
+                    print(f"  嘗試使用 {provider['name']}: {provider['model']}")
                     markdown_part = process_image_with_openai(
                         image_path,
-                        config["openai"]["api_key"],
-                        config["openai"]["base_url"],
-                        config["openai"]["model"]
+                        provider["api_key"],
+                        provider["base_url"],
+                        provider["model"]
                     )
                     if markdown_part:
                         full_markdown_content.append(markdown_part)
                         page_processed = True
                         break
-                
+
                 if page_processed:
                     break
 
@@ -168,7 +187,7 @@ def main():
     load_dotenv()
     config = get_config()
 
-    if not config["gemini"]["api_key"] and not config["openai"]["api_key"]:
+    if not config["gemini"]["api_key"] and not config["openai_providers"]:
         print("錯誤：找不到任何 API 設定。請確保您的 .env 檔案已正確設定。")
         return
 
@@ -184,7 +203,7 @@ def main():
         shutil.rmtree(TEMP_IMAGE_FOLDER)
     os.makedirs(TEMP_IMAGE_FOLDER)
 
-    print("--- PDF/圖片 OCR 處理程式 (Gemini & OpenAI 相容版) ---")
+    print("--- eBook Converter (PDF/圖片 OCR 處理程式 - Gemini & OpenAI 相容版) ---")
 
     try:
         files_to_process = [f for f in os.listdir(INPUT_FOLDER) if os.path.isfile(os.path.join(INPUT_FOLDER, f))]
