@@ -5,12 +5,23 @@ from dotenv import load_dotenv
 from pdf_handler import convert_pdf_to_images
 from ocr_processor import process_image_with_gemini, process_image_with_openai
 from opencc import OpenCC
+from converters import (
+    convert_epub,
+    convert_mobi_family,
+    convert_pdf_direct,
+    convert_txt,
+    to_traditional_chinese,
+    sanitize_filename
+)
 
 # --- 常數定義 ---
 INPUT_FOLDER = "input"
 OUTPUT_FOLDER = "output"
 TEMP_IMAGE_FOLDER = "temp_images"
-SUPPORTED_IMAGE_EXTENSIONS = (".jpg", ".jpeg", ".png")
+
+EBOOK_EXTENSIONS = (".epub", ".mobi", ".azw", ".azw3", ".txt")
+IMAGE_EXTENSIONS = (".jpg", ".jpeg", ".png", ".webp", ".bmp")
+ALL_SUPPORTED_EXTENSIONS = EBOOK_EXTENSIONS + IMAGE_EXTENSIONS + (".pdf",)
 MAX_RETRY_ROUNDS = 3
 
 # --- 初始化 OpenCC ---
@@ -63,35 +74,37 @@ def save_progress(temp_path, content_list):
     except IOError as e:
         print(f"錯誤：無法寫入暫存檔案 {temp_path}: {e}")
 
-def process_file(filename, config):
-    """處理單一檔案 (PDF 或圖片) 的完整流程。"""
+def process_file_ai_ocr(filename, output_format, config):
+    """使用 AI Vision API (Gemini / OpenAI) 進行 OCR 處理。"""
     file_path = os.path.join(INPUT_FOLDER, filename)
     file_ext = os.path.splitext(filename)[1].lower()
-    output_filename_base = os.path.splitext(filename)[0]
-    temp_output_path = os.path.join(OUTPUT_FOLDER, f"{output_filename_base}_temp.md")
+    safe_base_name = sanitize_filename(os.path.splitext(filename)[0])
+    temp_output_path = os.path.join(OUTPUT_FOLDER, f"{safe_base_name}_temp.md")
 
     image_paths = []
     full_markdown_content = []
     processed_pages = 0
 
+    if not config["gemini"]["api_key"] and not config["openai_providers"]:
+        print(f"錯誤：處理 {filename} 需要 AI API，但找不到任何 API 金鑰設定。")
+        return False
+
     # 1. 準備圖片路徑
     if file_ext == ".pdf":
-        print(f"\n--- 正在處理 PDF 檔案: {file_path} ---")
+        print(f"\n--- 正在透過 AI OCR 處理 PDF 檔案: {filename} ---")
         image_paths = convert_pdf_to_images(file_path, TEMP_IMAGE_FOLDER)
-    elif file_ext in SUPPORTED_IMAGE_EXTENSIONS:
-        print(f"\n--- 正在處理圖片檔案: {file_path} ---")
+    elif file_ext in IMAGE_EXTENSIONS:
+        print(f"\n--- 正在透過 AI OCR 處理圖片檔案: {filename} ---")
         image_paths.append(file_path)
-    else:
-        return True # 不是支援的檔案，直接跳過
 
     if not image_paths:
-        print(f"檔案 {filename} 未能成功轉換或不是支援的格式。")
+        print(f"檔案 {filename} 未能成功擷取頁面圖片。")
         return True
 
     # 2. 檢查並處理暫存檔案
     if os.path.exists(temp_output_path):
         while True:
-            choice = input(f"找到檔案 '{filename}' 的暫存進度，要繼續嗎？ (y/n): ").lower()
+            choice = input(f"找到檔案 '{filename}' 的暫存進度，要繼續嗎？ (y/n): ").strip().lower()
             if choice in ['y', 'yes']:
                 print(f"正在從 {temp_output_path} 載入進度...")
                 with open(temp_output_path, "r", encoding="utf-8") as f:
@@ -122,7 +135,7 @@ def process_file(filename, config):
 
             for round_num in range(MAX_RETRY_ROUNDS):
                 print(f"第 {round_num + 1}/{MAX_RETRY_ROUNDS} 輪嘗試...")
-                
+
                 # 優先嘗試 Gemini
                 if config["gemini"]["api_key"]:
                     print(f"  嘗試使用 Gemini: {config['gemini']['model']}")
@@ -159,21 +172,24 @@ def process_file(filename, config):
                 print("程式將終止。請檢查您的網路連線或 API 設定。")
                 return False
 
-        # 4. 處理完成
+        # 4. 處理完成並儲存
         if full_markdown_content:
-            output_filename = f"{output_filename_base}.md"
+            out_ext = ".md" if output_format.lower() == "md" else ".txt"
+            output_filename = f"{safe_base_name}{out_ext}"
             output_path = os.path.join(OUTPUT_FOLDER, output_filename)
-            combined_markdown = "\n\n---\n\n".join(full_markdown_content)
-            final_markdown_content = cc.convert(combined_markdown)
+
+            sep = "\n\n---\n\n" if output_format.lower() == "md" else "\n\n"
+            combined_content = sep.join(full_markdown_content)
+            final_content = to_traditional_chinese(combined_content)
 
             with open(output_path, "w", encoding="utf-8") as f:
-                f.write(final_markdown_content)
+                f.write(final_content)
 
-            print(f"\n成功將結果儲存至 {output_path}")
+            print(f"\n[成功] 已將結果儲存至: {output_path}")
             if os.path.exists(temp_output_path):
                 os.remove(temp_output_path)
         else:
-            print(f"檔案 {filename} 未能產生任何有效的 Markdown 內容。")
+            print(f"檔案 {filename} 未能產生任何有效內容。")
 
     except KeyboardInterrupt:
         print("\n使用者中斷操作。")
@@ -182,18 +198,54 @@ def process_file(filename, config):
 
     return True
 
+def ask_user_options(has_pdf: bool):
+    """提供互動式選單詢問使用者輸出格式與 PDF 處理模式。"""
+    print("\n" + "=" * 55)
+    print("                eBook Converter 選單")
+    print("=" * 55)
+    print("請選擇輸出格式 (Output Format)：")
+    print("  [1] Markdown (.md) - 保留標題結構，圖片存放於子資料夾")
+    print("  [2] 純文字 Text (.txt) - 純文字提取，無格式標記")
+    
+    while True:
+        choice = input("\n請輸入選項 [1 或 2，預設 1]: ").strip()
+        if choice in ["", "1"]:
+            output_format = "md"
+            break
+        elif choice == "2":
+            output_format = "txt"
+            break
+        else:
+            print("輸入無效，請輸入 1 或 2。")
+
+    pdf_mode = "direct"
+    if has_pdf:
+        print("\n偵測到 input 資料夾中包含 PDF 檔案，請選擇 PDF 處理模式：")
+        print("  [1] 直接文字提取 (Direct Extract) - 快速、不需 AI，適用於數位文字版 PDF/電子書")
+        print("  [2] AI 視覺 OCR (AI Vision OCR)  - 需 API 金鑰，適用於掃描件、圖片版 PDF")
+        
+        while True:
+            pdf_choice = input("\n請輸入 PDF 處理選項 [1 或 2，預設 1]: ").strip()
+            if pdf_choice in ["", "1"]:
+                pdf_mode = "direct"
+                break
+            elif pdf_choice == "2":
+                pdf_mode = "ocr"
+                break
+            else:
+                print("輸入無效，請輸入 1 或 2。")
+
+    print("=" * 55 + "\n")
+    return output_format, pdf_mode
+
 def main():
     """主執行函式"""
     load_dotenv()
     config = get_config()
 
-    if not config["gemini"]["api_key"] and not config["openai_providers"]:
-        print("錯誤：找不到任何 API 設定。請確保您的 .env 檔案已正確設定。")
-        return
-
     if not os.path.exists(INPUT_FOLDER):
         os.makedirs(INPUT_FOLDER)
-        print(f"已建立 '{INPUT_FOLDER}' 資料夾，請放入檔案。")
+        print(f"已建立 '{INPUT_FOLDER}' 資料夾，請放入待轉換檔案後重新執行。")
         return
         
     if not os.path.exists(OUTPUT_FOLDER):
@@ -203,19 +255,90 @@ def main():
         shutil.rmtree(TEMP_IMAGE_FOLDER)
     os.makedirs(TEMP_IMAGE_FOLDER)
 
-    print("--- eBook Converter (PDF/圖片 OCR 處理程式 - Gemini & OpenAI 相容版) ---")
+    print("=======================================================")
+    print("       eBook Converter - 電子書與文件多格式轉換工具       ")
+    print("=======================================================")
+    print(f"支援格式: EPUB, MOBI, AZW, AZW3, PDF, TXT, JPG, PNG")
+    print(f"繁簡轉換: 輸出全自動轉換為台灣常用繁體中文 (s2twp)")
+
+    # 檢查 input 檔案
+    all_files = [f for f in os.listdir(INPUT_FOLDER) if os.path.isfile(os.path.join(INPUT_FOLDER, f))]
+    valid_files = [f for f in all_files if os.path.splitext(f)[1].lower() in ALL_SUPPORTED_EXTENSIONS]
+
+    if not valid_files:
+        print(f"\n[提示] '{INPUT_FOLDER}' 資料夾中沒有找到支援的檔案。")
+        print(f"請將 EPUB, MOBI, AZW3, PDF, TXT 或 圖片檔放入 '{INPUT_FOLDER}' 後再試。")
+        return
+
+    has_pdf = any(os.path.splitext(f)[1].lower() == ".pdf" for f in valid_files)
+    output_format, pdf_mode = ask_user_options(has_pdf)
+
+    print(f"即將開始處理 {len(valid_files)} 個檔案...")
+    print(f"目標格式: {output_format.upper()} | PDF 模式: {'AI 視覺 OCR' if pdf_mode == 'ocr' else '直接快速提取'}\n")
+
+    success_count = 0
+    fail_count = 0
 
     try:
-        files_to_process = [f for f in os.listdir(INPUT_FOLDER) if os.path.isfile(os.path.join(INPUT_FOLDER, f))]
-        for filename in files_to_process:
-            if not process_file(filename, config):
-                break
-        else:
-            print("\n--- 所有檔案處理完畢 ---")
+        for filename in valid_files:
+            file_path = os.path.join(INPUT_FOLDER, filename)
+            ext = os.path.splitext(filename)[1].lower()
+            print(f"\n>> 正在處理: {filename}")
+
+            try:
+                # 1. EPUB
+                if ext == ".epub":
+                    out_path = convert_epub(file_path, output_format, OUTPUT_FOLDER)
+                    print(f"  [完成] 輸出至: {out_path}")
+                    success_count += 1
+
+                # 2. MOBI / AZW / AZW3
+                elif ext in [".mobi", ".azw", ".azw3"]:
+                    out_path = convert_mobi_family(file_path, output_format, OUTPUT_FOLDER)
+                    print(f"  [完成] 輸出至: {out_path}")
+                    success_count += 1
+
+                # 3. TXT
+                elif ext == ".txt":
+                    out_path = convert_txt(file_path, output_format, OUTPUT_FOLDER)
+                    print(f"  [完成] 輸出至: {out_path}")
+                    success_count += 1
+
+                # 4. PDF
+                elif ext == ".pdf":
+                    if pdf_mode == "ocr":
+                        ok = process_file_ai_ocr(filename, output_format, config)
+                        if ok:
+                            success_count += 1
+                        else:
+                            fail_count += 1
+                            break
+                    else:
+                        out_path = convert_pdf_direct(file_path, output_format, OUTPUT_FOLDER)
+                        print(f"  [完成] 輸出至: {out_path}")
+                        success_count += 1
+
+                # 5. 獨立圖片 (JPG, PNG 等) -> 走 AI OCR
+                elif ext in IMAGE_EXTENSIONS:
+                    ok = process_file_ai_ocr(filename, output_format, config)
+                    if ok:
+                        success_count += 1
+                    else:
+                        fail_count += 1
+                        break
+
+            except Exception as e:
+                print(f"  [錯誤] 處理 {filename} 時發生異常: {e}")
+                fail_count += 1
+
+        print("\n" + "=" * 55)
+        print(f"處理結束！ 成功: {success_count} 個, 失敗/中斷: {fail_count} 個")
+        print(f"轉換成果已存放於: {os.path.abspath(OUTPUT_FOLDER)}")
+        print("=" * 55)
+
     finally:
         if os.path.exists(TEMP_IMAGE_FOLDER):
-            shutil.rmtree(TEMP_IMAGE_FOLDER)
-
+            shutil.rmtree(TEMP_IMAGE_FOLDER, ignore_errors=True)
 
 if __name__ == "__main__":
     main()

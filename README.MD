@@ -1,100 +1,81 @@
-# eBook Converter (PDF/圖片 OCR 轉換器)
+# eBook Converter (多格式電子書與文件轉換器)
 
-本專案提供一個強大的工具，使用 Google Gemini API 或 OpenAI 相容 API 將 PDF 檔案、圖片與電子書內容轉換為 Markdown 文字。它被設計用來無縫處理大型檔案、中斷續傳，並支援多種 AI 模型調用。
+本專案提供一個強大的電子書與文件轉換工具，支援多種常見電子書格式（EPUB、MOBI、AZW3/AZW、TXT、PDF）以及掃描圖檔轉換，並提供 **直接快速轉換（不需 AI）** 與 **AI 視覺 OCR（Gemini & OpenAI 相容 API）** 兩種處理模式。所有輸出內容均自動轉換為台灣慣用繁體中文。
 
-## 功能
+## 主要功能
 
-- **支援 PDF 和圖片**: 將 PDF 檔案和獨立的圖片（JPG, JPEG, PNG）轉換為 Markdown。
-- **中斷處理**: 自動儲存進度，並允許從上次成功處理的頁面恢復。
-- **AI 策略**: 支援原生 Google Gemini API 以及 OpenAI 相容的第 3 方 API（如 Groq, DeepSeek, gpt-4o 等）。
-- **重試機制**: 為處理每個頁面實作重試循環，以增強可靠性。
-- **中文支援**: 包含將輸出文字從簡體中文轉換為繁體中文的功能。
-- **暫存檔案管理**: 處理完成後清理暫存的圖片檔案。
+- **多種輸入格式支援**：
+  - **電子書與文字檔**：`EPUB`、`MOBI`、`AZW`、`AZW3`、`TXT`（自動辨識編碼，不需消耗 AI API）。
+  - **PDF 雙模式**：
+    - **快速文字提取**：直接解析數位文字版 PDF 與嵌入圖片（不需 AI，秒級轉換）。
+    - **AI 視覺 OCR**：針對掃描件或純圖片 PDF 呼叫 AI Vision 模型識別。
+  - **獨立圖片 OCR**：支援 `JPG`、`JPEG`、`PNG`、`WEBP`、`BMP` 圖片 OCR。
+- **靈活的輸出格式（互動式選單）**：
+  - **Markdown (`.md`)**：保留標題、章節與表格結構；若文件含有圖片，自動抽取並存入專屬子資料夾（如 `output/<檔名>_images/`）且自動於 Markdown 中相對引用。
+  - **純文字 Text (`.txt`)**：抽取純文字內容，去除格式標記。
+- **台灣繁體中文相容**：全自動透過 OpenCC (`s2twp`) 將輸出文字轉換為台灣慣用字與詞彙。
+- **中斷續傳與錯誤重試**：AI OCR 模式支援頁面暫存（`*_temp.md`）與多輪嘗試機制。
 
 ## 專案結構
 
 ```
 eBook-Converter/
 │
-├───input/                  # 用於輸入 PDF 和圖片檔案的資料夾
-├───output/                 # 用於輸出 Markdown 檔案的資料夾
-├───main.py                 # 執行 OCR 處理的主腳本
-├───pdf_handler.py          # 處理 PDF 到圖片的轉換
-├───ocr_processor.py        # 使用 AI API 處理圖片
-├───requirements.txt        # Python 依賴套件
+├───input/                  # 放置待轉換的電子書、PDF 與圖片檔案
+├───output/                 # 輸出目錄 (Markdown, TXT 與圖片子目錄)
+├───converters/             # 各格式非 AI 直接解析模組
+│   ├── base.py             # 繁簡轉換、HTML2MD、編碼與檔案工具
+│   ├── epub_converter.py   # EPUB 解析器
+│   ├── mobi_converter.py   # MOBI / AZW / AZW3 解析器
+│   ├── pdf_direct.py       # PDF 直接文字與圖片提取
+│   └── txt_converter.py    # TXT 多編碼偵測與轉換
+├───main.py                 # 主程式 (互動選單與批次轉換調度)
+├───pdf_handler.py          # PDF 轉圖檔模組 (供 AI OCR 使用)
+├───ocr_processor.py        # AI 視覺 OCR 模組 (Gemini / OpenAI)
+├───requirements.txt        # Python 依賴套件清單
 └───env.example             # 環境變數設定範例
 ```
 
 ## 如何使用
 
-1.  **先決條件**:
-    *   Python 3.x
-    *   Google Gemini API 金鑰 或 OpenAI 相容 API 金鑰
+### 1. 安裝環境與套件
+```bash
+# 建議先啟用虛擬環境
+.\.venv\Scripts\Activate.ps1   # (Windows PowerShell)
 
-2.  **安裝**:
-    *   複製儲存庫：
-        ```bash
-        git clone https://github.com/hongdartw/ebook-converter.git
-        cd ebook-converter
-        ```
-    *   安裝所需的 Python 套件：
-        ```bash
-        pip install -r requirements.txt
-        ```
+# 安裝依賴套件
+pip install -r requirements.txt
+```
 
-3.  **設定**:
-    *   在專案根目錄中建立一個 `.env` 檔案。
-    *   參考 `env.example` 設定您的 API 金鑰。您可以同時設定兩者，系統將優先使用 Gemini：
-        ```env
-        # Gemini API 設定
-        GEMINI_API_KEY="您的 API 金鑰"
-        GEMINI_MODEL="gemini-1.5-flash-latest"
+### 2. 設定 API 金鑰（僅使用 AI OCR 模式時需要）
+若需使用 AI OCR 功能處理掃描件 PDF 或圖片，請建立 `.env` 檔案並填入金鑰：
+```env
+# Gemini API 設定 (優先使用)
+GEMINI_API_KEY="your_gemini_api_key"
+GEMINI_MODEL="gemini-1.5-flash-latest"
 
-        # OpenAI 或相容的第 3 方 API 設定
-        OPENAI_API_KEY="您的 API 金鑰"
-        OPENAI_API_URL="https://api.openai.com/v1"
-        OPENAI_MODEL="gpt-4o"
-        ```
+# OpenAI 或相容的第 3 方 API 設定
+OPENAI_API_KEY="your_openai_api_key"
+OPENAI_API_URL="https://api.openai.com/v1"
+OPENAI_MODEL="gpt-4o"
+```
+*(若只轉換一般 EPUB、MOBI、AZW3、TXT 或文字型 PDF，則不需配置 API 金鑰即可直接使用)*
 
-4.  **執行 OCR**:
-    *   將您的 PDF 或圖片檔案放入 `input` 資料夾。
-    *   執行主腳本：
-        ```bash
-        python main.py
-        ```
-    *   腳本將處理每個檔案，並將輸出儲存為 Markdown 檔案在 `output` 資料夾中。
-
-5.  **恢復中斷的會話**:
-    *   如果腳本被中斷（例如，按下 `Ctrl+C` 或因錯誤），一個暫存檔案（`*_temp.md`）將被儲存在 `output` 資料夾中。
-    *   當您再次執行腳本時，它會偵測到暫存檔案並詢問您是否要恢復。輸入 `y` 以從上次中斷的地方繼續。
-
-## 主要元件
-
-### `main.py`
-
-協調整個流程的主腳本。它處理：
-- 從 `.env` 檔案載入 AI 設定。
-- 優先嘗試 Gemini，失敗時切換至 OpenAI 相容 API。
-- 管理用於中斷處理的暫存進度檔案。
-- 呼叫 `pdf_handler` 和 `ocr_processor` 模組。
-- 將最終輸出從簡體中文轉換為繁體中文。
-
-### `pdf_handler.py`
-
--   **`convert_pdf_to_images(pdf_path, output_folder)`**: 使用 `PyMuPDF` 將給定 PDF 檔案的每一頁轉換為 PNG 圖片。
-
-### `ocr_processor.py`
-
--   **`process_image_with_gemini`**: 使用 Google 原生 SDK 進行 OCR。
--   **`process_image_with_openai`**: 使用 OpenAI SDK 對接相容介面（如 GPT-4o, Claude via Proxy 等）。
+### 3. 執行轉換
+1. 將欲轉換的檔案放入 `input/` 資料夾。
+2. 執行主程式：
+   ```bash
+   python main.py
+   ```
+3. 根據終端機上的互動選單進行選擇：
+   - 選擇輸出格式（`1: Markdown` 或 `2: Text`）
+   - 若有 PDF 檔案，選擇處理模式（`1: 直接文字提取` 或 `2: AI 視覺 OCR`）
+4. 轉換完成後，成果將輸出至 `output/` 資料夾中。
 
 ## 依賴套件
-
--   `google-generativeai`
--   `openai`
--   `python-dotenv`
--   `Pillow`
--   `PyMuPDF`
--   `opencc-python-reimplemented`
-
-透過執行 `pip install -r requirements.txt` 來安裝所有依賴套件。
+- `google-generativeai` & `openai`：AI 視覺 OCR
+- `PyMuPDF (fitz)`：PDF 解析與圖檔提取
+- `EbookLib` & `mobi`：EPUB、MOBI、AZW3 電子書解析
+- `beautifulsoup4` & `markdownify`：HTML/XML 結構清理與 Markdown 轉換
+- `opencc-python-reimplemented`：繁簡中文轉換 (s2twp)
+- `charset-normalizer` & `Pillow`：編碼辨識與影像處理

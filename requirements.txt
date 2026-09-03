@@ -1,6 +1,16 @@
-google-generativeai
-PyMuPDF
-Pillow
-python-dotenv
-opencc-python-reimplemented
+# AI OCR 與 Vision API
+google-genai
 openai
+
+# 核心環境與工具
+python-dotenv
+Pillow
+opencc-python-reimplemented
+charset-normalizer
+
+# PDF 與 電子書解析庫
+pymupdf
+EbookLib
+beautifulsoup4
+markdownify
+mobi

@@ -1,5 +1,7 @@
-
-import fitz  # PyMuPDF
+try:
+    import pymupdf as fitz
+except ImportError:
+    import fitz
 import os
 from PIL import Image
 
@@ -26,4 +28,3 @@ def convert_pdf_to_images(pdf_path, output_folder):
     except Exception as e:
         print(f"處理 PDF {pdf_path} 時發生錯誤: {e}")
         return []
-
