@@ -107,14 +107,23 @@ def clean_ai_ocr_artifacts(text: str) -> str:
     text = re.sub(r'^\s*```\s*$', '', text, flags=re.MULTILINE)
 
     text = html_lib.unescape(text).replace('\u2003', ' ')
+    # 移除 OCR 偶爾產生的 HTML 換行/置中標籤，但保留其中正文。
+    text = re.sub(r'<br\s*/?>', '', text, flags=re.IGNORECASE)
+    text = re.sub(r'^\s*<center>\s*$', '', text, flags=re.IGNORECASE | re.MULTILINE)
+    text = re.sub(r'^\s*</center>\s*$', '', text, flags=re.IGNORECASE | re.MULTILINE)
+    text = re.sub(r'<center>\s*(.*?)\s*</center>', lambda m: m.group(1).strip(), text, flags=re.IGNORECASE | re.DOTALL)
 
     # 移除 pdfFactory 試用版浮水印與其可能被 OCR 成的連結/HTML 下標。
     text = re.sub(r'^\s*(?:[*_`~]*\s*)?(?:<sub>)?PDF\s+created\s+with\s+pdfFactory\s+Pro\s+trial\s+version(?:\s+(?:\[[^\]]+\]\([^\)]+\)|\S+))?(?:</sub>)?(?:\s*[*_`~]*)?\s*$', '', text, flags=re.IGNORECASE | re.MULTILINE)
 
-    # 移除獨立頁碼：- 2 -、— 3 —、第 3 頁、Page 3、<div align="center">- 8 -</div> 等。
-    text = re.sub(r'^\s*<div[^>]*>\s*[-—–_]*\s*(?:第\s*)?\d{1,4}\s*(?:頁|页)?\s*[-—–_]*\s*</div>\s*$', '', text, flags=re.IGNORECASE | re.MULTILINE)
-    text = re.sub(r'^\s*<div[^>]*>\s*[〔\[（(【]?\s*[-—–―_一二三四五六七八九十百千〇零○\d\s]+\s*[〕\]）)】]?\s*</div>\s*$', '', text, flags=re.IGNORECASE | re.MULTILINE)
-    text = re.sub(r'^\s*[-—–_]*\s*(?:第\s*)?\d{1,4}\s*(?:頁|页)?\s*[-—–_]*\s*$', '', text, flags=re.MULTILINE)
+    # 只移除 AI 產生的置中/靠右 HTML 包裝，保留頁碼文字本身，例如：<p align="center">— 28 —</p> -> — 28 —。
+    page_marker_re = r'[〔\[（(【]?\s*[-—–―━－_一二三四五六七八九十百千〇零○\d\s]+\s*[〕\]）)】]?'
+    text = re.sub(
+        rf'^\s*<(?:p|div|center)\b[^>]*>\s*({page_marker_re})\s*</(?:p|div|center)>\s*$',
+        lambda m: m.group(1).strip(),
+        text,
+        flags=re.IGNORECASE | re.MULTILINE,
+    )
     text = re.sub(r'^\s*(?:Page|PAGE|page)\s*\d{1,4}\s*(?:/\s*\d{1,4})?\s*$', '', text, flags=re.MULTILINE)
 
     # 移除 AI/OCR 造成的空分隔線。
