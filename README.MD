@@ -1,6 +1,6 @@
 # eBook Converter (多格式電子書與文件轉換器)
 
-本專案提供一個強大的電子書與文件轉換工具，支援多種常見電子書格式（EPUB、MOBI、AZW3/AZW、TXT、PDF）以及掃描圖檔轉換，並提供 **直接快速轉換（不需 AI）** 與 **AI 視覺 OCR（Gemini & OpenAI 相容 API）** 兩種處理模式。所有輸出內容均自動轉換為台灣慣用繁體中文。
+本專案提供一個強大的電子書與文件轉換工具，支援多種常見電子書格式（EPUB、MOBI、AZW3/AZW、TXT、PDF）以及 Microsoft Office 文件，並提供 **直接快速轉換（不需 AI）**、**officecli 文件擷取** 與 **AI 視覺 OCR（Gemini & OpenAI 相容 API）** 三種處理模式。所有輸出內容均自動轉換為台灣慣用繁體中文。
 
 ## 主要功能
 
@@ -9,6 +9,7 @@
   - **PDF 雙模式**：
     - **快速文字提取**：直接解析數位文字版 PDF 與嵌入圖片（不需 AI，秒級轉換）。
     - **AI 視覺 OCR**：針對掃描件或純圖片 PDF 呼叫 AI Vision 模型識別。
+  - **Microsoft Office 文件**：支援 `DOCX`、`XLSX`，透過本機 `officecli view ... text` 擷取內容；請先安裝並確認 `officecli` 在 PATH 中。
   - **獨立圖片 OCR**：支援 `JPG`、`JPEG`、`PNG`、`WEBP`、`BMP` 圖片 OCR。
 - **靈活的輸出格式（互動式選單）**：
   - **Markdown (`.md`)**：保留標題、章節與表格結構；若文件含有圖片，自動抽取並存入專屬子資料夾（如 `output/<檔名>_images/`）且自動於 Markdown 中相對引用。
@@ -41,6 +42,7 @@ eBook-Converter/
 ### 1. 安裝環境與套件
 ```bash
 # 建議先啟用虛擬環境
+python -m venv venv
 .\.venv\Scripts\Activate.ps1   # (Windows PowerShell)
 
 # 安裝依賴套件

@@ -10,6 +10,7 @@ from converters import (
     convert_mobi_family,
     convert_pdf_direct,
     convert_txt,
+    convert_office,
     to_traditional_chinese,
     sanitize_filename
 )
@@ -20,8 +21,9 @@ OUTPUT_FOLDER = "output"
 TEMP_IMAGE_FOLDER = "temp_images"
 
 EBOOK_EXTENSIONS = (".epub", ".mobi", ".azw", ".azw3", ".txt")
+OFFICE_EXTENSIONS = (".docx", ".xlsx")
 IMAGE_EXTENSIONS = (".jpg", ".jpeg", ".png", ".webp", ".bmp")
-ALL_SUPPORTED_EXTENSIONS = EBOOK_EXTENSIONS + IMAGE_EXTENSIONS + (".pdf",)
+ALL_SUPPORTED_EXTENSIONS = EBOOK_EXTENSIONS + OFFICE_EXTENSIONS + IMAGE_EXTENSIONS + (".pdf",)
 MAX_RETRY_ROUNDS = 3
 
 # --- 初始化 OpenCC ---
@@ -258,7 +260,7 @@ def main():
     print("=======================================================")
     print("       eBook Converter - 電子書與文件多格式轉換工具       ")
     print("=======================================================")
-    print(f"支援格式: EPUB, MOBI, AZW, AZW3, PDF, TXT, JPG, PNG")
+    print(f"支援格式: EPUB, MOBI, AZW, AZW3, PDF, TXT, DOCX, XLSX, JPG, PNG")
     print(f"繁簡轉換: 輸出全自動轉換為台灣常用繁體中文 (s2twp)")
 
     # 檢查 input 檔案
@@ -304,7 +306,13 @@ def main():
                     print(f"  [完成] 輸出至: {out_path}")
                     success_count += 1
 
-                # 4. PDF
+                # 4. Microsoft Office 文件 -> 透過 officecli 擷取文字
+                elif ext in OFFICE_EXTENSIONS:
+                    out_path = convert_office(file_path, output_format, OUTPUT_FOLDER)
+                    print(f"  [完成] officecli 輸出至: {out_path}")
+                    success_count += 1
+
+                # 5. PDF
                 elif ext == ".pdf":
                     if pdf_mode == "ocr":
                         ok = process_file_ai_ocr(filename, output_format, config)
@@ -318,7 +326,7 @@ def main():
                         print(f"  [完成] 輸出至: {out_path}")
                         success_count += 1
 
-                # 5. 獨立圖片 (JPG, PNG 等) -> 走 AI OCR
+                # 6. 獨立圖片 (JPG, PNG 等) -> 走 AI OCR
                 elif ext in IMAGE_EXTENSIONS:
                     ok = process_file_ai_ocr(filename, output_format, config)
                     if ok:

@@ -10,7 +10,8 @@ from .base import (
     html_to_text,
     sanitize_filename,
     clean_xml_artifacts,
-    format_markdown_headers
+    format_markdown_headers,
+    normalize_vertical_brackets
 )
 from .epub_converter import convert_epub
 from .txt_converter import read_text_file_with_detection
@@ -139,7 +140,7 @@ def convert_mobi_family(file_path: str, output_format: str, output_folder: str) 
         if output_format.lower() == 'md':
             combined_text = format_markdown_headers(combined_text)
             
-        final_text = to_traditional_chinese(combined_text)
+        final_text = normalize_vertical_brackets(to_traditional_chinese(combined_text))
         
         out_ext = ".md" if output_format.lower() == 'md' else ".txt"
         out_file = os.path.join(output_folder, f"{safe_base_name}{out_ext}")

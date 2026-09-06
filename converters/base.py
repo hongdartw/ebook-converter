@@ -13,6 +13,20 @@ def to_traditional_chinese(text: str) -> str:
         return ""
     return cc_s2twp.convert(text)
 
+
+def normalize_vertical_brackets(text: str) -> str:
+    """將直式排版使用的 Unicode 括號轉為橫式括號。"""
+    if not text:
+        return ""
+    vertical_to_horizontal = str.maketrans({
+        "︵": "（", "︶": "）", "︷": "｛", "︸": "｝",
+        "︹": "〔", "︺": "〕", "︻": "【", "︼": "】",
+        "︽": "《", "︾": "》", "︿": "〈", "﹀": "〉",
+        "﹁": "「", "﹂": "」", "﹃": "『", "﹄": "』",
+        "﹇": "［", "﹈": "］",
+    })
+    return text.translate(vertical_to_horizontal)
+
 def sanitize_filename(name: str) -> str:
     """清理檔案名稱中的非法字元。"""
     return re.sub(r'[\\/*?:"<>|]', '_', name)

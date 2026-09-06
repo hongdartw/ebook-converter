@@ -9,7 +9,8 @@ from .base import (
     html_to_text,
     sanitize_filename,
     clean_xml_artifacts,
-    format_markdown_headers
+    format_markdown_headers,
+    normalize_vertical_brackets
 )
 
 def convert_epub(file_path: str, output_format: str, output_folder: str) -> str:
@@ -80,7 +81,7 @@ def convert_epub(file_path: str, output_format: str, output_folder: str) -> str:
     if output_format.lower() == 'md':
         combined_text = format_markdown_headers(combined_text)
         
-    final_text = to_traditional_chinese(combined_text)
+    final_text = normalize_vertical_brackets(to_traditional_chinese(combined_text))
     
     # 寫入輸出檔案
     out_ext = ".md" if output_format.lower() == 'md' else ".txt"
