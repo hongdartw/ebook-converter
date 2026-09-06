@@ -14,6 +14,7 @@ from converters import (
     convert_office,
     to_traditional_chinese,
     to_traditional_chinese_preserving_obsidian_embeds,
+    clean_ai_ocr_artifacts,
     markdown_images_to_obsidian,
     sanitize_filename
 )
@@ -203,7 +204,7 @@ def process_file_ai_ocr(filename, output_format, config):
                             markdown_part = None
                             continue
                         if markdown_part:
-                            full_markdown_content.append(markdown_part)
+                            full_markdown_content.append(clean_ai_ocr_artifacts(markdown_part))
                             page_processed = True
                             break
                     if page_processed:
@@ -222,7 +223,7 @@ def process_file_ai_ocr(filename, output_format, config):
                             model_name
                         )
                         if markdown_part:
-                            full_markdown_content.append(markdown_part)
+                            full_markdown_content.append(clean_ai_ocr_artifacts(markdown_part))
                             page_processed = True
                             provider_success = True
                             break
@@ -246,7 +247,7 @@ def process_file_ai_ocr(filename, output_format, config):
             output_path = os.path.join(OUTPUT_FOLDER, output_filename)
 
             sep = "\n\n---\n\n" if output_format.lower() == "md" else "\n\n"
-            combined_content = sep.join(full_markdown_content)
+            combined_content = clean_ai_ocr_artifacts(sep.join(full_markdown_content))
             if output_format.lower() == "md":
                 combined_content = markdown_images_to_obsidian(combined_content)
                 final_content = to_traditional_chinese_preserving_obsidian_embeds(combined_content)

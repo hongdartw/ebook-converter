@@ -1,5 +1,6 @@
 import os
 import re
+import html as html_lib
 from bs4 import BeautifulSoup, NavigableString
 from opencc import OpenCC
 import markdownify
@@ -91,6 +92,36 @@ def normalize_vertical_brackets(text: str) -> str:
 def sanitize_filename(name: str) -> str:
     """清理檔案名稱中的非法字元。"""
     return re.sub(r'[\\/*?:"<>|]', '_', name)
+
+def clean_ai_ocr_artifacts(text: str) -> str:
+    """清除 AI OCR 常見的回答包裝、程式碼圍欄、頁碼與 PDF 浮水印雜訊。"""
+    if not text:
+        return ""
+
+    # 移除 AI 回答常見前導語，避免「以下是...Markdown...」混入正文。
+    text = re.sub(r'^\s*(以下是|這是|这是).{0,80}?(Markdown|markdown).{0,40}[:：]\s*$', '', text, flags=re.MULTILINE)
+    text = re.sub(r'^\s*(好的|當然|当然)[，,。！!\s]*(以下是|我將).{0,80}$', '', text, flags=re.MULTILINE)
+
+    # 移除 Markdown 程式碼圍欄；OCR 結果本身不應被包在 ```markdown 裡。
+    text = re.sub(r'^\s*```(?:markdown|md|text)?\s*$', '', text, flags=re.IGNORECASE | re.MULTILINE)
+    text = re.sub(r'^\s*```\s*$', '', text, flags=re.MULTILINE)
+
+    text = html_lib.unescape(text).replace('\u2003', ' ')
+
+    # 移除 pdfFactory 試用版浮水印與其可能被 OCR 成的連結/HTML 下標。
+    text = re.sub(r'^\s*(?:[*_`~]*\s*)?(?:<sub>)?PDF\s+created\s+with\s+pdfFactory\s+Pro\s+trial\s+version(?:\s+(?:\[[^\]]+\]\([^\)]+\)|\S+))?(?:</sub>)?(?:\s*[*_`~]*)?\s*$', '', text, flags=re.IGNORECASE | re.MULTILINE)
+
+    # 移除獨立頁碼：- 2 -、— 3 —、第 3 頁、Page 3、<div align="center">- 8 -</div> 等。
+    text = re.sub(r'^\s*<div[^>]*>\s*[-—–_]*\s*(?:第\s*)?\d{1,4}\s*(?:頁|页)?\s*[-—–_]*\s*</div>\s*$', '', text, flags=re.IGNORECASE | re.MULTILINE)
+    text = re.sub(r'^\s*<div[^>]*>\s*[〔\[（(【]?\s*[-—–―_一二三四五六七八九十百千〇零○\d\s]+\s*[〕\]）)】]?\s*</div>\s*$', '', text, flags=re.IGNORECASE | re.MULTILINE)
+    text = re.sub(r'^\s*[-—–_]*\s*(?:第\s*)?\d{1,4}\s*(?:頁|页)?\s*[-—–_]*\s*$', '', text, flags=re.MULTILINE)
+    text = re.sub(r'^\s*(?:Page|PAGE|page)\s*\d{1,4}\s*(?:/\s*\d{1,4})?\s*$', '', text, flags=re.MULTILINE)
+
+    # 移除 AI/OCR 造成的空分隔線。
+    text = re.sub(r'^\s*---\s*$', '', text, flags=re.MULTILINE)
+
+    return re.sub(r'\n{3,}', '\n\n', text).strip()
+
 
 def clean_xml_artifacts(text: str) -> str:
     """徹底清除殘留的 XML 宣告、DOCTYPE、HTML 中繼與標頭標籤字串。"""

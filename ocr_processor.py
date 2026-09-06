@@ -7,6 +7,16 @@ import io
 
 GEMINI_MODEL_NOT_FOUND = "__GEMINI_MODEL_NOT_FOUND__"
 
+OCR_PROMPT = """
+你是一個專業 OCR 引擎。請只輸出圖片中的正文內容，格式為乾淨 Markdown。
+嚴格規則：
+1. 不要加入任何說明、前言、結語，例如「以下是...」。
+2. 不要使用 ```markdown 或任何程式碼圍欄包住結果。
+3. 忽略頁碼、頁眉頁腳、掃描浮水印、網站連結與試用版浮水印，例如 pdfFactory / www.pdffactory.com。
+4. 保留原書標題、段落、列表與表格；無法確認的內容不要杜撰。
+5. 輸出 Markdown 時圖片請用 Obsidian 嵌入語法 ![[資料夾/檔名]]，不要使用 ![](...)。
+""".strip()
+
 def _is_gemini_model_not_found(error_text: str) -> bool:
     """判斷 Gemini 錯誤是否為模型不存在/不支援，這類錯誤不應每頁重試。"""
     lowered = (error_text or "").lower()
@@ -22,7 +32,7 @@ def process_image_with_gemini(image_path, api_key, model_name):
         print("Gemini 未設定模型，跳過 Gemini 原生 API。")
         return None
 
-    prompt = "你是一個專業的 OCR 引擎。請將這張圖片中的所有內容，包含標題、段落、列表和表格，轉換為結構良好、語法正確的 Markdown 格式。請盡力還原原始的排版結構。"
+    prompt = OCR_PROMPT
     
     # 優先嘗試新的 google-genai SDK
     try:
@@ -93,7 +103,7 @@ def process_image_with_openai(image_path, api_key, base_url, model_name):
         with open(image_path, "rb") as image_file:
             base64_image = base64.b64encode(image_file.read()).decode('utf-8')
 
-        prompt = "你是一個專業的 OCR 引擎。請將這張圖片中的所有內容，包含標題、段落、列表和表格，轉換為結構良好、語法正確的 Markdown 格式。請盡力還原原始的排版結構。"
+        prompt = OCR_PROMPT
         
         response = client.chat.completions.create(
             model=model_name,
