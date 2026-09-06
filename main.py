@@ -12,6 +12,8 @@ from converters import (
     convert_txt,
     convert_office,
     to_traditional_chinese,
+    to_traditional_chinese_preserving_obsidian_embeds,
+    markdown_images_to_obsidian,
     sanitize_filename
 )
 
@@ -182,7 +184,11 @@ def process_file_ai_ocr(filename, output_format, config):
 
             sep = "\n\n---\n\n" if output_format.lower() == "md" else "\n\n"
             combined_content = sep.join(full_markdown_content)
-            final_content = to_traditional_chinese(combined_content)
+            if output_format.lower() == "md":
+                combined_content = markdown_images_to_obsidian(combined_content)
+                final_content = to_traditional_chinese_preserving_obsidian_embeds(combined_content)
+            else:
+                final_content = to_traditional_chinese(combined_content)
 
             with open(output_path, "w", encoding="utf-8") as f:
                 f.write(final_content)

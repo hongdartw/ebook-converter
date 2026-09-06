@@ -6,6 +6,7 @@ import mobi
 from bs4 import BeautifulSoup
 from .base import (
     to_traditional_chinese,
+    to_traditional_chinese_preserving_obsidian_embeds,
     html_to_markdown,
     html_to_text,
     sanitize_filename,
@@ -79,7 +80,7 @@ def convert_mobi_family(file_path: str, output_format: str, output_folder: str) 
                             dest_img_name = f"img_{img_idx:03d}{ext}"
                             dest_img_path = os.path.join(images_dir_abs, dest_img_name)
                             shutil.copy2(src_img_path, dest_img_path)
-                            rel_path = f"./{images_dir_rel}/{dest_img_name}"
+                            rel_path = f"{images_dir_rel}/{dest_img_name}"
                             image_map[f] = rel_path
                             image_map[os.path.basename(f)] = rel_path
                             img_idx += 1
@@ -140,7 +141,10 @@ def convert_mobi_family(file_path: str, output_format: str, output_folder: str) 
         if output_format.lower() == 'md':
             combined_text = format_markdown_headers(combined_text)
             
-        final_text = normalize_vertical_brackets(to_traditional_chinese(combined_text))
+        if output_format.lower() == 'md':
+            final_text = normalize_vertical_brackets(to_traditional_chinese_preserving_obsidian_embeds(combined_text))
+        else:
+            final_text = normalize_vertical_brackets(to_traditional_chinese(combined_text))
         
         out_ext = ".md" if output_format.lower() == 'md' else ".txt"
         out_file = os.path.join(output_folder, f"{safe_base_name}{out_ext}")

@@ -1,6 +1,6 @@
 import os
 import re
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup, NavigableString
 from opencc import OpenCC
 import markdownify
 
@@ -12,6 +12,67 @@ def to_traditional_chinese(text: str) -> str:
     if not text:
         return ""
     return cc_s2twp.convert(text)
+
+
+def to_traditional_chinese_preserving_obsidian_embeds(text: str) -> str:
+    """轉換正文繁簡，但保留 Obsidian 圖片/資源嵌入路徑原字元不變。"""
+    if not text:
+        return ""
+    embeds = []
+
+    def keep_embed(match):
+        embeds.append(match.group(0))
+        return f"@@OBSIDIAN_EMBED_{len(embeds) - 1}@@"
+
+    protected = re.sub(r'!\[\[[^\]]+\]\]', keep_embed, text)
+    converted = to_traditional_chinese(protected)
+    for idx, embed in enumerate(embeds):
+        converted = converted.replace(f"@@OBSIDIAN_EMBED_{idx}@@", embed)
+    return converted
+
+
+def obsidian_embed(path: str) -> str:
+    """產生 Obsidian 原生嵌入語法，路徑不可做繁簡轉換且不使用 ./ 前綴。"""
+    normalized = (path or "").replace('\\', '/').lstrip('./')
+    return f"![[{normalized}]]"
+
+
+def _unescape_obsidian_path(path: str) -> str:
+    """還原 markdownify 在 Obsidian 路徑中加入的跳脫字元。"""
+    return re.sub(r'\\([_\[\]()*.!#/+\-])', r'\1', path or "")
+
+
+def normalize_obsidian_embeds(md_text: str) -> str:
+    """確保 Obsidian 嵌入語法與 callout 不被 Markdown 跳脫破壞。"""
+    if not md_text:
+        return ""
+    md_text = re.sub(
+        r'!\[\[([^\]]+)\]\]',
+        lambda m: obsidian_embed(_unescape_obsidian_path(m.group(1))),
+        md_text,
+    )
+    md_text = md_text.replace('> \\*\\*【注】\\*\\*', '> **【注】**')
+    return md_text
+
+
+def markdown_images_to_obsidian(md_text: str) -> str:
+    """將傳統 Markdown 圖片語法轉為 Obsidian Wikilink 嵌入語法。"""
+    if not md_text:
+        return ""
+
+    # 先處理 EPUB 常見的圖片註腳跳轉：[![長註腳](icon.png) 1](#footnote-x)
+    md_text = re.sub(
+        r'\[!\[([^\]]*)\]\(([^\n)]*)\)\s*([^\]]*)\]\((#[^\n)]*)\)',
+        lambda m: f"> **【注】** {(m.group(1) or m.group(3) or '').strip()}",
+        md_text,
+    )
+
+    md_text = re.sub(
+        r'!\[([^\]]*)\]\(([^\n)]*)\)',
+        lambda m: obsidian_embed(_unescape_obsidian_path(m.group(2))),
+        md_text,
+    )
+    return normalize_obsidian_embeds(md_text)
 
 
 def normalize_vertical_brackets(text: str) -> str:
@@ -159,20 +220,35 @@ def html_to_markdown(html_content: str, image_map: dict = None) -> str:
 
     preprocess_html_headings(soup)
 
-    # 替換圖片 src
-    if image_map:
-        for img in soup.find_all('img'):
-            src = img.get('src', '')
-            basename_src = os.path.basename(src)
-            if src in image_map:
-                img['src'] = image_map[src]
-            elif basename_src in image_map:
-                img['src'] = image_map[basename_src]
-            else:
-                for k, v in image_map.items():
-                    if src.endswith(k) or k.endswith(src):
-                        img['src'] = v
-                        break
+    def resolve_image_path(src: str) -> str:
+        if not image_map:
+            return src
+        basename_src = os.path.basename(src)
+        if src in image_map:
+            return image_map[src]
+        if basename_src in image_map:
+            return image_map[basename_src]
+        for k, v in image_map.items():
+            if src.endswith(k) or k.endswith(src):
+                return v
+        return src
+
+    # 清理 EPUB 常見的「註腳連結包圖片」：避免產生超長 alt 圖片與無效跳轉圖標。
+    for link in soup.find_all('a'):
+        img = link.find('img')
+        if not img:
+            continue
+        href = link.get('href', '')
+        alt_text = (img.get('alt') or img.get('title') or '').strip()
+        link_text = link.get_text(' ', strip=True)
+        note_text = alt_text or link_text
+        if href.startswith('#') or 'footnote' in href.lower() or len(note_text) > 20:
+            link.replace_with(NavigableString(f"\n> **【注】** {note_text}\n"))
+
+    # 圖片強制使用 Obsidian Wikilink 嵌入，避免 ()、空格造成傳統 Markdown 路徑截斷。
+    for img in soup.find_all('img'):
+        src = img.get('src', '')
+        img.replace_with(NavigableString(obsidian_embed(resolve_image_path(src))))
 
     cleaned_html = str(soup)
     md_text = markdownify.markdownify(
@@ -184,6 +260,7 @@ def html_to_markdown(html_content: str, image_map: dict = None) -> str:
     
     # 清理 XML 與標頭殘留
     md_text = clean_xml_artifacts(md_text)
+    md_text = markdown_images_to_obsidian(md_text)
     # 智能加強標題格式
     md_text = format_markdown_headers(md_text)
     

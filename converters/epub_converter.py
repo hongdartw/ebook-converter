@@ -5,6 +5,7 @@ from ebooklib import epub
 from bs4 import BeautifulSoup
 from .base import (
     to_traditional_chinese,
+    to_traditional_chinese_preserving_obsidian_embeds,
     html_to_markdown,
     html_to_text,
     sanitize_filename,
@@ -45,7 +46,7 @@ def convert_epub(file_path: str, output_format: str, output_folder: str) -> str:
             with open(img_filepath, "wb") as img_f:
                 img_f.write(item.get_content())
                 
-            rel_path = f"./{images_dir_rel}/{img_filename}"
+            rel_path = f"{images_dir_rel}/{img_filename}"
             image_map[item.get_name()] = rel_path
             image_map[item_name] = rel_path
             img_idx += 1
@@ -81,7 +82,10 @@ def convert_epub(file_path: str, output_format: str, output_folder: str) -> str:
     if output_format.lower() == 'md':
         combined_text = format_markdown_headers(combined_text)
         
-    final_text = normalize_vertical_brackets(to_traditional_chinese(combined_text))
+    if output_format.lower() == 'md':
+        final_text = normalize_vertical_brackets(to_traditional_chinese_preserving_obsidian_embeds(combined_text))
+    else:
+        final_text = normalize_vertical_brackets(to_traditional_chinese(combined_text))
     
     # 寫入輸出檔案
     out_ext = ".md" if output_format.lower() == 'md' else ".txt"

@@ -4,7 +4,14 @@ try:
     import pymupdf as fitz
 except ImportError:
     import fitz
-from .base import to_traditional_chinese, sanitize_filename, clean_xml_artifacts
+from .base import (
+    to_traditional_chinese,
+    to_traditional_chinese_preserving_obsidian_embeds,
+    sanitize_filename,
+    clean_xml_artifacts,
+    markdown_images_to_obsidian,
+    obsidian_embed,
+)
 
 
 def _join_pdf_wrapped_lines(lines):
@@ -181,8 +188,8 @@ def extract_page_markdown(page, doc, page_num, images_dir_rel, images_dir_abs, b
                     img_path = os.path.join(images_dir_abs, img_filename)
                     with open(img_path, "wb") as f_img:
                         f_img.write(image_bytes)
-                    rel_link = f"./{images_dir_rel}/{img_filename}"
-                    page_md_lines.append(f"![頁面 {page_num + 1} 圖片]({rel_link})\n")
+                    rel_link = f"{images_dir_rel}/{img_filename}"
+                    page_md_lines.append(f"{obsidian_embed(rel_link)}\n")
                     global_img_count += 1
             except Exception:
                 pass
@@ -279,8 +286,8 @@ def extract_page_markdown(page, doc, page_num, images_dir_rel, images_dir_abs, b
                 if not os.path.exists(img_path):
                     with open(img_path, "wb") as f_img:
                         f_img.write(img_bytes)
-                    rel_link = f"./{images_dir_rel}/{img_filename}"
-                    page_md_lines.append(f"![頁面 {page_num + 1} 圖片]({rel_link})\n")
+                    rel_link = f"{images_dir_rel}/{img_filename}"
+                    page_md_lines.append(f"{obsidian_embed(rel_link)}\n")
                     global_img_count += 1
             except Exception:
                 pass
@@ -346,7 +353,11 @@ def convert_pdf_direct(file_path: str, output_format: str, output_folder: str) -
 
     combined_text = _combine_page_contents(page_contents)
     cleaned_text = clean_xml_artifacts(combined_text)
-    final_text = to_traditional_chinese(cleaned_text)
+    if output_format.lower() == 'md':
+        cleaned_text = markdown_images_to_obsidian(cleaned_text)
+        final_text = to_traditional_chinese_preserving_obsidian_embeds(cleaned_text)
+    else:
+        final_text = to_traditional_chinese(cleaned_text)
 
     out_ext = ".md" if output_format.lower() == 'md' else ".txt"
     out_file = os.path.join(output_folder, f"{safe_base_name}{out_ext}")
