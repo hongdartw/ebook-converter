@@ -13,11 +13,15 @@ def _is_gemini_model_not_found(error_text: str) -> bool:
     return "404" in lowered and ("not_found" in lowered or "is not found" in lowered or "not found" in lowered)
 
 
-def process_image_with_gemini(image_path, api_key, model_name='gemini-2.5-flash'):
+def process_image_with_gemini(image_path, api_key, model_name):
     """
     對單張圖片進行 Gemini OCR 處理。
     相容最新的 google-genai SDK 與傳統的 google-generativeai SDK。
     """
+    if not model_name:
+        print("Gemini 未設定模型，跳過 Gemini 原生 API。")
+        return None
+
     prompt = "你是一個專業的 OCR 引擎。請將這張圖片中的所有內容，包含標題、段落、列表和表格，轉換為結構良好、語法正確的 Markdown 格式。請盡力還原原始的排版結構。"
     
     # 優先嘗試新的 google-genai SDK

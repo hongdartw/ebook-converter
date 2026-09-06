@@ -33,15 +33,15 @@ MAX_RETRY_ROUNDS = 3
 cc = OpenCC('s2twp')
 
 
-def _parse_model_list(value: str, default_model: str):
+def _parse_model_list(value: str, default_model: str = None):
     """解析 .env 中的模型清單；支援逗號/分號分隔，並去除重複。"""
-    raw = value or default_model
+    raw = value or default_model or ""
     models = []
     for model in re.split(r'[,;]', raw):
         model = model.strip().strip('"\'')
         if model and model not in models:
             models.append(model)
-    return models or [default_model]
+    return models
 
 
 def get_config():
@@ -74,7 +74,8 @@ def get_config():
     config = {
         "gemini": {
             "api_key": os.getenv("GEMINI_API_KEY"),
-            "models": _parse_model_list(os.getenv("GEMINI_MODELS") or os.getenv("GEMINI_MODEL"), "gemini-2.5-flash"),
+            # 不設定 GEMINI_MODELS/GEMINI_MODEL 時不自動啟用預設模型，避免誤用使用者未指定的模型。
+            "models": _parse_model_list(os.getenv("GEMINI_MODELS") or os.getenv("GEMINI_MODEL")),
         },
         "openai_providers": openai_providers,
     }
@@ -105,7 +106,7 @@ def process_file_ai_ocr(filename, output_format, config):
     processed_pages = 0
     disabled_gemini_models = set()
 
-    if not config["gemini"]["api_key"] and not config["openai_providers"]:
+    if not (config["gemini"]["api_key"] and config["gemini"].get("models")) and not config["openai_providers"]:
         print(f"錯誤：處理 {filename} 需要 AI API，但找不到任何 API 金鑰設定。")
         return False
 
@@ -157,7 +158,7 @@ def process_file_ai_ocr(filename, output_format, config):
                 print(f"第 {round_num + 1}/{MAX_RETRY_ROUNDS} 輪嘗試...")
 
                 # 優先嘗試 Gemini，多模型依序 fallback。
-                if config["gemini"]["api_key"]:
+                if config["gemini"]["api_key"] and config["gemini"].get("models"):
                     for model_name in config["gemini"].get("models", []):
                         if model_name in disabled_gemini_models:
                             continue
