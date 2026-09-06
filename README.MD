@@ -57,15 +57,15 @@ GEMINI_API_KEY="your_gemini_api_key"
 # 多模型 fallback：#1 失敗會自動改用 #2、#3...
 GEMINI_MODELS="gemini-2.5-flash,gemini-2.0-flash"
 
-# OpenAI 或相容的第 3 方 API 設定
-OPENAI_API_KEY="your_openai_api_key"
-OPENAI_API_URL="https://api.openai.com/v1"
-OPENAI_MODELS="gpt-4o,gpt-4o-mini"
+# OpenAI 相容 Provider 設定
+# Provider #1 為主；#1 所有模型失敗後，才會改用 #2。
+OPENAI_1_API_KEY="your_provider1_api_key"
+OPENAI_1_API_URL="https://provider1.example.com/v1"
+OPENAI_1_MODELS="model-1,model-2"
 
-# 額外 Proxy 也支援多模型
-# PROXY_1_API_KEY="your_proxy_api_key"
-# PROXY_1_API_URL="https://proxy.example.com/v1"
-# PROXY_1_MODELS="model-1,model-2"
+# OPENAI_2_API_KEY="your_provider2_api_key"
+# OPENAI_2_API_URL="https://provider2.example.com/v1"
+# OPENAI_2_MODELS="model-1,model-2"
 ```
 *(若只轉換一般 EPUB、MOBI、AZW3、TXT 或文字型 PDF，則不需配置 API 金鑰即可直接使用)*
 

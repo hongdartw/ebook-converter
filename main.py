@@ -44,31 +44,61 @@ def _parse_model_list(value: str, default_model: str = None):
     return models
 
 
+def _append_openai_provider(providers, name: str, key: str, base_url: str, models_value: str):
+    """加入一組 OpenAI 相容 provider；同一組 key/url 不重複加入。"""
+    if not key:
+        return
+    if any(p["api_key"] == key and p.get("base_url") == base_url for p in providers):
+        return
+    providers.append({
+        "name": name,
+        "api_key": key,
+        "base_url": base_url,
+        "models": _parse_model_list(models_value, "gpt-4o"),
+    })
+
+
 def get_config():
-    """從環境變數中讀取 AI 設定，支援多模型依序 fallback。"""
+    """從環境變數中讀取 AI 設定，支援多 provider、多模型依序 fallback。"""
     openai_providers = []
 
-    if os.getenv("OPENAI_API_KEY"):
-        models = _parse_model_list(os.getenv("OPENAI_MODELS") or os.getenv("OPENAI_MODEL"), "gpt-4o")
-        openai_providers.append({
-            "name": "OpenAI",
-            "api_key": os.getenv("OPENAI_API_KEY"),
-            "base_url": os.getenv("OPENAI_API_URL"),
-            "models": models,
-        })
+    # 新格式：OPENAI_1_* 為主 provider，OPENAI_2_* 起為備用 provider。
+    i = 1
+    while True:
+        key = os.getenv(f"OPENAI_{i}_API_KEY")
+        if not key:
+            break
+        _append_openai_provider(
+            openai_providers,
+            f"OpenAI Provider {i}",
+            key,
+            os.getenv(f"OPENAI_{i}_API_URL"),
+            os.getenv(f"OPENAI_{i}_MODELS") or os.getenv(f"OPENAI_{i}_MODEL"),
+        )
+        i += 1
 
+    # 相容舊格式：OPENAI_* 視為主 provider。
+    _append_openai_provider(
+        openai_providers,
+        "OpenAI Provider 1",
+        os.getenv("OPENAI_API_KEY"),
+        os.getenv("OPENAI_API_URL"),
+        os.getenv("OPENAI_MODELS") or os.getenv("OPENAI_MODEL"),
+    )
+
+    # 相容舊格式：PROXY_1_*、PROXY_2_* 視為備用 provider。
     i = 1
     while True:
         key = os.getenv(f"PROXY_{i}_API_KEY")
         if not key:
             break
-        models = _parse_model_list(os.getenv(f"PROXY_{i}_MODELS") or os.getenv(f"PROXY_{i}_MODEL"), "gpt-4o")
-        openai_providers.append({
-            "name": f"Proxy {i}",
-            "api_key": key,
-            "base_url": os.getenv(f"PROXY_{i}_API_URL"),
-            "models": models,
-        })
+        _append_openai_provider(
+            openai_providers,
+            f"OpenAI Backup Provider {i + 1}",
+            key,
+            os.getenv(f"PROXY_{i}_API_URL"),
+            os.getenv(f"PROXY_{i}_MODELS") or os.getenv(f"PROXY_{i}_MODEL"),
+        )
         i += 1
 
     config = {
@@ -179,10 +209,12 @@ def process_file_ai_ocr(filename, output_format, config):
                     if page_processed:
                         break
 
-                # 依序嘗試所有 OpenAI 相容 API (含 Proxy)，每個 provider 也可設定多模型 fallback。
-                for provider in config["openai_providers"]:
+                # 依序嘗試所有 OpenAI 相容 provider：provider1 所有模型都失敗後，才改用 provider2。
+                for provider_idx, provider in enumerate(config["openai_providers"], start=1):
+                    print(f"  使用 OpenAI 相容 Provider #{provider_idx}: {provider['name']} ({provider.get('base_url') or 'default'})")
+                    provider_success = False
                     for model_name in provider.get("models", []):
-                        print(f"  嘗試使用 {provider['name']}: {model_name}")
+                        print(f"    嘗試模型: {model_name}")
                         markdown_part = process_image_with_openai(
                             image_path,
                             provider["api_key"],
@@ -192,9 +224,11 @@ def process_file_ai_ocr(filename, output_format, config):
                         if markdown_part:
                             full_markdown_content.append(markdown_part)
                             page_processed = True
+                            provider_success = True
                             break
-                    if page_processed:
+                    if provider_success:
                         break
+                    print(f"  Provider #{provider_idx} 所有模型皆失敗，改用下一個備用 provider。")
 
                 if page_processed:
                     break

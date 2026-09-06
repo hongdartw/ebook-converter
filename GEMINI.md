@@ -28,14 +28,14 @@ pip install -r requirements.txt
 GEMINI_API_KEY=your_gemini_api_key
 GEMINI_MODELS=gemini-2.5-flash,gemini-2.0-flash
 
-OPENAI_API_KEY=your_openai_api_key
-OPENAI_API_URL=https://api.openai.com/v1
-OPENAI_MODELS=gpt-4o,gpt-4o-mini
+# OpenAI 相容 Provider #1 為主；#1 所有模型失敗後才改用 #2。
+OPENAI_1_API_KEY=your_provider1_api_key
+OPENAI_1_API_URL=https://provider1.example.com/v1
+OPENAI_1_MODELS=model-1,model-2
 
-# OpenAI 相容 Proxy 也支援多模型 fallback
-# PROXY_1_API_KEY=your_proxy_api_key
-# PROXY_1_API_URL=https://proxy.example.com/v1
-# PROXY_1_MODELS=model-1,model-2
+# OPENAI_2_API_KEY=your_provider2_api_key
+# OPENAI_2_API_URL=https://provider2.example.com/v1
+# OPENAI_2_MODELS=model-1,model-2
 ```
 
 ### 3. 執行程式
