@@ -54,12 +54,18 @@ pip install -r requirements.txt
 ```env
 # Gemini API 設定 (優先使用)
 GEMINI_API_KEY="your_gemini_api_key"
-GEMINI_MODEL="gemini-2.5-flash"
+# 多模型 fallback：#1 失敗會自動改用 #2、#3...
+GEMINI_MODELS="gemini-2.5-flash,gemini-2.0-flash"
 
 # OpenAI 或相容的第 3 方 API 設定
 OPENAI_API_KEY="your_openai_api_key"
 OPENAI_API_URL="https://api.openai.com/v1"
-OPENAI_MODEL="gpt-4o"
+OPENAI_MODELS="gpt-4o,gpt-4o-mini"
+
+# 額外 Proxy 也支援多模型
+# PROXY_1_API_KEY="your_proxy_api_key"
+# PROXY_1_API_URL="https://proxy.example.com/v1"
+# PROXY_1_MODELS="model-1,model-2"
 ```
 *(若只轉換一般 EPUB、MOBI、AZW3、TXT 或文字型 PDF，則不需配置 API 金鑰即可直接使用)*
 

@@ -26,11 +26,16 @@ pip install -r requirements.txt
 參考 `env.example` 建立 `.env`：
 ```env
 GEMINI_API_KEY=your_gemini_api_key
-GEMINI_MODEL=gemini-2.5-flash
+GEMINI_MODELS=gemini-2.5-flash,gemini-2.0-flash
 
 OPENAI_API_KEY=your_openai_api_key
 OPENAI_API_URL=https://api.openai.com/v1
-OPENAI_MODEL=gpt-4o
+OPENAI_MODELS=gpt-4o,gpt-4o-mini
+
+# OpenAI 相容 Proxy 也支援多模型 fallback
+# PROXY_1_API_KEY=your_proxy_api_key
+# PROXY_1_API_URL=https://proxy.example.com/v1
+# PROXY_1_MODELS=model-1,model-2
 ```
 
 ### 3. 執行程式

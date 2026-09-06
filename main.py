@@ -1,4 +1,5 @@
 import os
+import re
 import shutil
 import sys
 from dotenv import load_dotenv
@@ -31,16 +32,29 @@ MAX_RETRY_ROUNDS = 3
 # --- 初始化 OpenCC ---
 cc = OpenCC('s2twp')
 
+
+def _parse_model_list(value: str, default_model: str):
+    """解析 .env 中的模型清單；支援逗號/分號分隔，並去除重複。"""
+    raw = value or default_model
+    models = []
+    for model in re.split(r'[,;]', raw):
+        model = model.strip().strip('"\'')
+        if model and model not in models:
+            models.append(model)
+    return models or [default_model]
+
+
 def get_config():
-    """從環境變數中讀取 AI 設定。"""
+    """從環境變數中讀取 AI 設定，支援多模型依序 fallback。"""
     openai_providers = []
 
     if os.getenv("OPENAI_API_KEY"):
+        models = _parse_model_list(os.getenv("OPENAI_MODELS") or os.getenv("OPENAI_MODEL"), "gpt-4o")
         openai_providers.append({
             "name": "OpenAI",
             "api_key": os.getenv("OPENAI_API_KEY"),
             "base_url": os.getenv("OPENAI_API_URL"),
-            "model": os.getenv("OPENAI_MODEL", "gpt-4o"),
+            "models": models,
         })
 
     i = 1
@@ -48,18 +62,19 @@ def get_config():
         key = os.getenv(f"PROXY_{i}_API_KEY")
         if not key:
             break
+        models = _parse_model_list(os.getenv(f"PROXY_{i}_MODELS") or os.getenv(f"PROXY_{i}_MODEL"), "gpt-4o")
         openai_providers.append({
-            "name": f"Proxy {i} ({os.getenv(f'PROXY_{i}_MODEL', 'unknown')})",
+            "name": f"Proxy {i}",
             "api_key": key,
             "base_url": os.getenv(f"PROXY_{i}_API_URL"),
-            "model": os.getenv(f"PROXY_{i}_MODEL", "gpt-4o"),
+            "models": models,
         })
         i += 1
 
     config = {
         "gemini": {
             "api_key": os.getenv("GEMINI_API_KEY"),
-            "model": os.getenv("GEMINI_MODEL", "gemini-2.5-flash"),
+            "models": _parse_model_list(os.getenv("GEMINI_MODELS") or os.getenv("GEMINI_MODEL"), "gemini-2.5-flash"),
         },
         "openai_providers": openai_providers,
     }
@@ -88,7 +103,7 @@ def process_file_ai_ocr(filename, output_format, config):
     image_paths = []
     full_markdown_content = []
     processed_pages = 0
-    gemini_disabled = False
+    disabled_gemini_models = set()
 
     if not config["gemini"]["api_key"] and not config["openai_providers"]:
         print(f"錯誤：處理 {filename} 需要 AI API，但找不到任何 API 金鑰設定。")
@@ -141,34 +156,43 @@ def process_file_ai_ocr(filename, output_format, config):
             for round_num in range(MAX_RETRY_ROUNDS):
                 print(f"第 {round_num + 1}/{MAX_RETRY_ROUNDS} 輪嘗試...")
 
-                # 優先嘗試 Gemini
-                if config["gemini"]["api_key"] and not gemini_disabled:
-                    print(f"  嘗試使用 Gemini: {config['gemini']['model']}")
-                    markdown_part = process_image_with_gemini(
-                        image_path,
-                        config["gemini"]["api_key"],
-                        config["gemini"]["model"]
-                    )
-                    if markdown_part == GEMINI_MODEL_NOT_FOUND:
-                        gemini_disabled = True
-                        markdown_part = None
-                    elif markdown_part:
-                        full_markdown_content.append(markdown_part)
-                        page_processed = True
+                # 優先嘗試 Gemini，多模型依序 fallback。
+                if config["gemini"]["api_key"]:
+                    for model_name in config["gemini"].get("models", []):
+                        if model_name in disabled_gemini_models:
+                            continue
+                        print(f"  嘗試使用 Gemini: {model_name}")
+                        markdown_part = process_image_with_gemini(
+                            image_path,
+                            config["gemini"]["api_key"],
+                            model_name
+                        )
+                        if markdown_part == GEMINI_MODEL_NOT_FOUND:
+                            disabled_gemini_models.add(model_name)
+                            markdown_part = None
+                            continue
+                        if markdown_part:
+                            full_markdown_content.append(markdown_part)
+                            page_processed = True
+                            break
+                    if page_processed:
                         break
 
-                # 依序嘗試所有 OpenAI 相容 API (含 Proxy)
+                # 依序嘗試所有 OpenAI 相容 API (含 Proxy)，每個 provider 也可設定多模型 fallback。
                 for provider in config["openai_providers"]:
-                    print(f"  嘗試使用 {provider['name']}: {provider['model']}")
-                    markdown_part = process_image_with_openai(
-                        image_path,
-                        provider["api_key"],
-                        provider["base_url"],
-                        provider["model"]
-                    )
-                    if markdown_part:
-                        full_markdown_content.append(markdown_part)
-                        page_processed = True
+                    for model_name in provider.get("models", []):
+                        print(f"  嘗試使用 {provider['name']}: {model_name}")
+                        markdown_part = process_image_with_openai(
+                            image_path,
+                            provider["api_key"],
+                            provider["base_url"],
+                            model_name
+                        )
+                        if markdown_part:
+                            full_markdown_content.append(markdown_part)
+                            page_processed = True
+                            break
+                    if page_processed:
                         break
 
                 if page_processed:
