@@ -5,7 +5,15 @@ from openai import OpenAI
 import base64
 import io
 
-def process_image_with_gemini(image_path, api_key, model_name='gemini-1.5-flash-latest'):
+GEMINI_MODEL_NOT_FOUND = "__GEMINI_MODEL_NOT_FOUND__"
+
+def _is_gemini_model_not_found(error_text: str) -> bool:
+    """判斷 Gemini 錯誤是否為模型不存在/不支援，這類錯誤不應每頁重試。"""
+    lowered = (error_text or "").lower()
+    return "404" in lowered and ("not_found" in lowered or "is not found" in lowered or "not found" in lowered)
+
+
+def process_image_with_gemini(image_path, api_key, model_name='gemini-2.5-flash'):
     """
     對單張圖片進行 Gemini OCR 處理。
     相容最新的 google-genai SDK 與傳統的 google-generativeai SDK。
@@ -31,6 +39,9 @@ def process_image_with_gemini(image_path, api_key, model_name='gemini-1.5-flash-
         pass
     except Exception as e:
         err_msg = str(e)
+        if _is_gemini_model_not_found(err_msg):
+            print(f"Gemini 模型不存在或不支援 generateContent：{model_name}，本次批次將停用 Gemini 並改用備援 API。")
+            return GEMINI_MODEL_NOT_FOUND
         if "response.text" in err_msg or "Candidate" in err_msg:
             print(f"Gemini API 處理圖片 {image_path} 時被阻擋或未回傳文字。")
         else:
@@ -55,6 +66,9 @@ def process_image_with_gemini(image_path, api_key, model_name='gemini-1.5-flash-
         return None
     except Exception as e:
         err_msg = str(e)
+        if _is_gemini_model_not_found(err_msg):
+            print(f"Gemini 模型不存在或不支援 generateContent：{model_name}，本次批次將停用 Gemini 並改用備援 API。")
+            return GEMINI_MODEL_NOT_FOUND
         if "response.text" in err_msg or "Candidate" in err_msg:
             print(f"Gemini API 處理圖片 {image_path} 時被阻擋或未回傳文字。")
         else:

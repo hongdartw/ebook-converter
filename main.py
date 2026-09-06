@@ -3,7 +3,7 @@ import shutil
 import sys
 from dotenv import load_dotenv
 from pdf_handler import convert_pdf_to_images
-from ocr_processor import process_image_with_gemini, process_image_with_openai
+from ocr_processor import GEMINI_MODEL_NOT_FOUND, process_image_with_gemini, process_image_with_openai
 from opencc import OpenCC
 from converters import (
     convert_epub,
@@ -59,7 +59,7 @@ def get_config():
     config = {
         "gemini": {
             "api_key": os.getenv("GEMINI_API_KEY"),
-            "model": os.getenv("GEMINI_MODEL", "gemini-1.5-flash-latest"),
+            "model": os.getenv("GEMINI_MODEL", "gemini-2.5-flash"),
         },
         "openai_providers": openai_providers,
     }
@@ -88,6 +88,7 @@ def process_file_ai_ocr(filename, output_format, config):
     image_paths = []
     full_markdown_content = []
     processed_pages = 0
+    gemini_disabled = False
 
     if not config["gemini"]["api_key"] and not config["openai_providers"]:
         print(f"錯誤：處理 {filename} 需要 AI API，但找不到任何 API 金鑰設定。")
@@ -141,14 +142,17 @@ def process_file_ai_ocr(filename, output_format, config):
                 print(f"第 {round_num + 1}/{MAX_RETRY_ROUNDS} 輪嘗試...")
 
                 # 優先嘗試 Gemini
-                if config["gemini"]["api_key"]:
+                if config["gemini"]["api_key"] and not gemini_disabled:
                     print(f"  嘗試使用 Gemini: {config['gemini']['model']}")
                     markdown_part = process_image_with_gemini(
                         image_path,
                         config["gemini"]["api_key"],
                         config["gemini"]["model"]
                     )
-                    if markdown_part:
+                    if markdown_part == GEMINI_MODEL_NOT_FOUND:
+                        gemini_disabled = True
+                        markdown_part = None
+                    elif markdown_part:
                         full_markdown_content.append(markdown_part)
                         page_processed = True
                         break

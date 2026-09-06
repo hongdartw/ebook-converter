@@ -54,7 +54,7 @@ pip install -r requirements.txt
 ```env
 # Gemini API 設定 (優先使用)
 GEMINI_API_KEY="your_gemini_api_key"
-GEMINI_MODEL="gemini-1.5-flash-latest"
+GEMINI_MODEL="gemini-2.5-flash"
 
 # OpenAI 或相容的第 3 方 API 設定
 OPENAI_API_KEY="your_openai_api_key"

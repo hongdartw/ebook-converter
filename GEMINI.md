@@ -26,7 +26,7 @@ pip install -r requirements.txt
 參考 `env.example` 建立 `.env`：
 ```env
 GEMINI_API_KEY=your_gemini_api_key
-GEMINI_MODEL=gemini-1.5-flash-latest
+GEMINI_MODEL=gemini-2.5-flash
 
 OPENAI_API_KEY=your_openai_api_key
 OPENAI_API_URL=https://api.openai.com/v1
